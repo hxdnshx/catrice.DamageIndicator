@@ -42,22 +42,22 @@ namespace catrice.DamageIndicator
                 harmony.Patch(hotReloadInjectPoint, new HarmonyMethod(hotReloadPatch), new HarmonyMethod(hotReloadPatchPost));
             }
 
-            {
+            if(false){
                 var hotReloadInjectPoint = typeof(Dam_EnemyDamageBase).GetMethod("ProcessReceivedDamage");
                 var hotReloadPatch = typeof(DamageIndicatorHooks).GetMethod("Prefix_ProcessReceivedDamage");
                 var hotReloadPatchPost = typeof(DamageIndicatorHooks).GetMethod("Postfix_ProcessReceivedDamage");
                 harmony.Patch(hotReloadInjectPoint, new HarmonyMethod(hotReloadPatch), new HarmonyMethod(hotReloadPatchPost));
             }
 
-            if (false){
+            {
                 // Hook function that not impl may cause crash?
-                var hotReloadInjectPoint = typeof(Dam_SyncedDamageBase).GetMethod("ReceiveMeleeDamage");
+                var hotReloadInjectPoint = typeof(Dam_EnemyDamageBase).GetMethod("ReceiveMeleeDamage");
                 var hotReloadPatch = typeof(DamageIndicatorHooks).GetMethod("Prefix_ReceiveMeleeDamage");
                 var hotReloadPatchPost = typeof(DamageIndicatorHooks).GetMethod("Postfix_ReceiveMeleeDamage");
                 harmony.Patch(hotReloadInjectPoint, new HarmonyMethod(hotReloadPatch), new HarmonyMethod(hotReloadPatchPost));
             }
 
-            if(false){
+            {
                 var hotReloadInjectPoint = typeof(Dam_EnemyDamageBase).GetMethod("ReceiveBulletDamage");
                 var hotReloadPatch = typeof(DamageIndicatorHooks).GetMethod("Prefix_ReceiveBulletDamage");
                 var hotReloadPatchPost = typeof(DamageIndicatorHooks).GetMethod("Postfix_ReceiveBulletDamage");

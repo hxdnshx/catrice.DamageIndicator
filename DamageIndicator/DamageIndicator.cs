@@ -211,6 +211,8 @@ namespace catrice.DamageIndicator
 
         public TextMeshPro SuccessReport1;
         public TextMeshPro SuccessReport2;
+
+        public float[] beforeDamage = new float[5]{0, 0, 0, 0, 0};
     }
 
     public struct StateData
@@ -226,100 +228,103 @@ namespace catrice.DamageIndicator
         public DamageIndicatorHooks(IntPtr intPtr) : base(intPtr)
         {
         }
-        public static void Prefix_ReceiveBulletDamage(Dam_SyncedDamageBase __instance, out StateData __state, pBulletDamageData data)//
+        public static void Prefix_ReceiveBulletDamage(Dam_SyncedDamageBase __instance, pBulletDamageData data)//
         {
             
             Agents.Agent src;
             data.source.TryGet(out src);
             PlayerAgent playerSrc = src.gameObject.GetComponent<PlayerAgent>();
-            Logger.Log($"Damage Called, PreLife: {__instance.Health}");
-            __state = new StateData { BeforeLife = __instance.Health, PlayerSrc = playerSrc };
-            
+            var inst = DamageIndicator.Instance;
+            inst.beforeDamage[playerSrc?.PlayerSlotIndex ?? 4] = __instance.Health;
+
 
         }
 
-        public static void Postfix_ReceiveBulletDamage(Dam_SyncedDamageBase __instance, StateData __state, pBulletDamageData data)//
+        public static void Postfix_ReceiveBulletDamage(Dam_SyncedDamageBase __instance, pBulletDamageData data)//
         {
             
-            var damage = __state.BeforeLife - __instance.Health;
-
-            //Logger.Log($"Damage Called, Final Damage: {damage}");
-            Logger.Log($"Damage Called, {data.damage.Get(100)}, {data.precisionMulti.Get(10)} {__state} {__instance.Health} {data.source}");
-
+            Agents.Agent src;
+            data.source.TryGet(out src);
+            PlayerAgent playerSrc = src.gameObject.GetComponent<PlayerAgent>();
             var inst = DamageIndicator.Instance;
-            inst.PlayerDamage[__state.PlayerSrc?.PlayerSlotIndex??4] += damage;
-            inst.TotalDamage += damage;
+            var damage = inst.beforeDamage[playerSrc?.PlayerSlotIndex ?? 4] - __instance.Health;
+
+            var damage_real = inst.beforeDamage[playerSrc?.PlayerSlotIndex ?? 4] - __instance.Health;
+
+            //Logger.Log($"Damage2 Called, Final Damage: {damage} {damage_real}");
+
+            inst.PlayerDamage[playerSrc?.PlayerSlotIndex ?? 4] += damage_real;
             inst.isListener = false;
 
         }
 
         public static void Prefix_ReceiveMeleeDamage(Dam_SyncedDamageBase __instance, pFullDamageData data)//, out StateData __state
         {
-            /*
             Agents.Agent src;
             data.source.TryGet(out src);
             PlayerAgent playerSrc = src.gameObject.GetComponent<PlayerAgent>();
-            __state = new StateData { BeforeLife = __instance.Health, PlayerSrc = playerSrc };
-            */
+            var inst = DamageIndicator.Instance;
+            inst.beforeDamage[playerSrc?.PlayerSlotIndex ?? 4] = __instance.Health;
 
         }
 
         public static void Postfix_ReceiveMeleeDamage(Dam_SyncedDamageBase __instance, pFullDamageData data)//, StateData __state
         {
-            /*
-            var damage = __state.BeforeLife - __instance.Health;
-
-            //Logger.Log($"Damage Called, Final Damage: {damage}");
-
+            Agents.Agent src;
+            data.source.TryGet(out src);
+            PlayerAgent playerSrc = src.gameObject.GetComponent<PlayerAgent>();
             var inst = DamageIndicator.Instance;
-            inst.PlayerDamage[__state.PlayerSrc?.PlayerSlotIndex ?? inst.LocalPlayerSlot] += damage;
-            inst.TotalDamage += damage;*/
+            var damage = inst.beforeDamage[playerSrc?.PlayerSlotIndex ?? 4] - __instance.Health;
+            
+
+            var damage_real = inst.beforeDamage[playerSrc?.PlayerSlotIndex ?? 4] - __instance.Health;
+
+            //Logger.Log($"Damage2 Called, Final Damage: {damage} {damage_real}");
+
+            inst.PlayerDamage[playerSrc?.PlayerSlotIndex ?? 4] += damage_real;
+            inst.isListener = false;
         }
 
-        public static void Prefix_BulletDamage(Dam_SyncedDamageBase __instance, out StateData __state, float dam, Agent sourceAgent, Vector3 position, Vector3 direction,
-            Vector3 normal, bool allowDirectionalBonus, [Optional] float staggerMulti,
-            [Optional] float precisionMulti)
+        public static void Prefix_BulletDamage(Dam_SyncedDamageBase __instance, float dam, Agent sourceAgent)
         {
 
-            Logger.Log($"Damage Called, Final Damage: {dam}");
             PlayerAgent playerSrc = sourceAgent.gameObject.GetComponent<PlayerAgent>();
-            __state = new StateData { BeforeLife = __instance.Health, PlayerSrc = playerSrc };
-        }
-
-        public static void Postfix_BulletDamage(Dam_SyncedDamageBase __instance, StateData __state, float dam, Agent sourceAgent, Vector3 position, Vector3 direction,
-            Vector3 normal, bool allowDirectionalBonus, [Optional] float staggerMulti,
-            [Optional] float precisionMulti)
-        {
-            if (__state.PlayerSrc == null) return;
-            var damage = __state.BeforeLife - __instance.Health;
-
-            Logger.Log($"Damage Called, Final Damage: {damage}");
-
             var inst = DamageIndicator.Instance;
-            inst.PlayerDamage[__state.PlayerSrc?.PlayerSlotIndex ?? 4] += damage;
-            inst.TotalDamage += damage;
+            inst.beforeDamage[playerSrc?.PlayerSlotIndex ?? 4] = __instance.Health;
         }
 
-        public static void Prefix_ProcessReceivedDamage(Dam_EnemyDamageBase __instance, out StateData __state, float damage, Agent damageSource, Vector3 position, Vector3 direction, ES_HitreactType hitreact, bool tryForceHitreact, [Optional] int limbID, [Optional] float staggerDamageMulti)
+        public static void Postfix_BulletDamage(Dam_SyncedDamageBase __instance, float dam, Agent sourceAgent)
+        {
+            PlayerAgent playerSrc = sourceAgent.gameObject.GetComponent<PlayerAgent>();
+            var inst = DamageIndicator.Instance;
+            var damage_real = inst.beforeDamage[playerSrc?.PlayerSlotIndex ?? 4] - __instance.Health;
+
+            //Logger.Log($"Damage2 Called, Final Damage: {damage} {damage_real}");
+
+            inst.PlayerDamage[playerSrc?.PlayerSlotIndex ?? 4] += damage_real;
+            inst.isListener = false;
+        }
+
+        public static void Prefix_ProcessReceivedDamage(Dam_EnemyDamageBase __instance,Agent damageSource)
 
         {
 
             //Logger.Log($"Damage2 Called, Final Damage: {damage}");
             PlayerAgent playerSrc = damageSource.gameObject.GetComponent<PlayerAgent>();
-            __state = new StateData { BeforeLife = __instance.Health, PlayerSrc = playerSrc };
+            var inst = DamageIndicator.Instance;
+            inst.beforeDamage[playerSrc?.PlayerSlotIndex ?? 4] = __instance.Health;
         }
 
-        public static void Postfix_ProcessReceivedDamage(Dam_EnemyDamageBase __instance, StateData __state, float damage, Agent damageSource, Vector3 position, Vector3 direction, ES_HitreactType hitreact, bool tryForceHitreact, [Optional] int limbID, [Optional] float staggerDamageMulti)
+        public static void Postfix_ProcessReceivedDamage(Dam_EnemyDamageBase __instance, Agent damageSource)
 
         {
-            if (__state.PlayerSrc == null) return;
-            var damage_real = __state.BeforeLife - __instance.Health;
+            PlayerAgent playerSrc = damageSource.gameObject.GetComponent<PlayerAgent>();
+            var inst = DamageIndicator.Instance;
+            var damage_real = inst.beforeDamage[playerSrc?.PlayerSlotIndex ?? 4] - __instance.Health;
 
             //Logger.Log($"Damage2 Called, Final Damage: {damage} {damage_real}");
 
-            var inst = DamageIndicator.Instance;
-            inst.PlayerDamage[__state.PlayerSrc?.PlayerSlotIndex ?? 4] += damage_real;
-            inst.TotalDamage += damage_real;
+            inst.PlayerDamage[playerSrc?.PlayerSlotIndex ?? 4] += damage_real;
             inst.isListener = false;
         }
 
