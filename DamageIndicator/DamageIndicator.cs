@@ -26,6 +26,9 @@ using UnityEngine;
 using System.Threading;
 using System.Transactions;
 using Agents;
+using Il2CppSystem.Resources;
+using Nidhogg.Managers;
+using PlayFab.ClientModels;
 using SNetwork;
 using UnhollowerBaseLib;
 using UnhollowerRuntimeLib;
@@ -33,6 +36,8 @@ using CancellationToken = Il2CppSystem.Threading.CancellationToken;
 
 namespace catrice.DamageIndicator
 {
+
+
     //From https://github.com/Flowaria/MTFO.Ext.PartialData
     [HarmonyPatch(typeof(CM_PageRundown_New), "PlaceRundown")]
     public class PrepareInjection
@@ -59,6 +64,16 @@ namespace catrice.DamageIndicator
     }
 
     //From: https://github.com/Endskill/PlaytimeTimer
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct DamageInfo
+    {
+        public double TotalDamage;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 5)]
+        public double[] PlayerDamage;
+        
+    }
+
     public class DamageIndicator : MonoBehaviour
     {
 
@@ -74,6 +89,8 @@ namespace catrice.DamageIndicator
 
         public void Awake()
         {
+            DamageInfo = new DamageInfo();
+            DamageInfo.PlayerDamage = new double[5];
             Instance = this;
             bool flag = this._intervalTimer == null;
             if (flag)
@@ -105,7 +122,16 @@ namespace catrice.DamageIndicator
                         var myFade = UnityEngine.Object.Instantiate(rectTransform.gameObject, rectTransform.parent);
                         var myRect = myFade.GetComponent<RectTransform>();
                         myFade.gameObject.SetActive(true);
-                        myFade.transform.localPosition = new Vector3(-70, -52 + -35 * (index + 1), 0);
+                        foreach (var childObj in myFade.GetComponentsInChildren<Transform>(true))
+                        {
+                            if (childObj.name == "TimerShowObject") // Remove TimerShowComponent.
+                                childObj.gameObject.active = false;
+                        }
+
+                        var realIndex = index +
+                                        (EntryPoint.AccInstalled ? 1 : 0) +
+                                        (EntryPoint.PlaytimeInstalled ? 2 : 0);
+                        myFade.transform.localPosition = new Vector3(-70, -52 + -35 * (realIndex), 0);
                         this.TextMesh[index] = UnityEngine.Object.Instantiate<TextMeshPro>(refTextMesh);
                         {
                             GameObject gameObject = new GameObject($"DamageIndicator{index}")
@@ -124,6 +150,14 @@ namespace catrice.DamageIndicator
 
                 }
             }
+
+
+            NetworkingManager.RegisterEvent<DamageInfo>("DamageIndicator", (senderId, packet) =>
+            {
+                // This action will be invoked whenever the current user receives the event
+                DamageInfo = packet;
+                Logger.Log($"Received New DamageInfo, Total:{packet.TotalDamage}");
+            });
         }
 
         public int counter = 0;
@@ -133,26 +167,30 @@ namespace catrice.DamageIndicator
         {
             bool update = this.update_;
             bool is_show = false;
+            bool isSend = false;
             if (update)
             {
                 if (Clock.ExpeditionProgressionTime < 2f)
                 {
-                    PlayerDamage[0] = 0;
-                    PlayerDamage[1] = 0;
-                    PlayerDamage[2] = 0;
-                    PlayerDamage[3] = 0;
+                    DamageInfo.PlayerDamage[0] = 0;
+                    DamageInfo.PlayerDamage[1] = 0;
+                    DamageInfo.PlayerDamage[2] = 0;
+                    DamageInfo.PlayerDamage[3] = 0;
                     isListener = true;
-                    TotalDamage = 0;
+                    DamageInfo.TotalDamage = 0;
                     LocalPlayerSlot = 0;//PlayerManager.GetLocalPlayerSlotIndex();
                 }
                 else
                 {
                     counter++;
-                    if (counter > 420 && isListener == false)
+                    if (counter > 240 && isListener == false)
                     {
                         counter = 0;
                         is_show = true;
                     }
+
+                    if ((counter % 10) == 0 && isListener == false)
+                        isSend = true;
                 }
 
                 this.update_ = false;
@@ -160,23 +198,24 @@ namespace catrice.DamageIndicator
                 double allDamage = 0;
                 for (int index = 0; index < 4; index++)
                 {
-                    allDamage += PlayerDamage[index];
+                    allDamage += DamageInfo.PlayerDamage[index];
                 }
+
 
                 for (int index = 0; index < 4; index++)
                 {
                     string txt = "";
-                    if (PlayerDamage[index] == 0)
+                    if (DamageInfo.PlayerDamage[index] == 0)
                     {
                         txt = $"{playerName_[index]}: -";
                     }
                     else
                     {
                         txt =
-                            $"{playerName_[index]}: {Math.Floor(PlayerDamage[index])}({Math.Floor((100 * PlayerDamage[index]) / allDamage)}%)";
+                            $"{playerName_[index]}: {Math.Floor(DamageInfo.PlayerDamage[index])}({Math.Floor((100 * DamageInfo.PlayerDamage[index]) / allDamage)}%)";
                     }
                     this.TextMesh[index].SetText(txt);
-                    if (is_show)
+                    if (is_show && ConfigManager.IsHideDamage == false)
                     {
                         if ((index % 2) == 0)
                         {
@@ -189,6 +228,13 @@ namespace catrice.DamageIndicator
                         }
                     }
                     this.TextMesh[index].ForceMeshUpdate();
+                }
+
+
+                if (isSend)
+                {
+                    Logger.Log($"Damage Info Sent. Total: {DamageInfo.TotalDamage}");
+                    NetworkingManager.InvokeEvent("DamageIndicator", DamageInfo);
                 }
 
             }
@@ -204,8 +250,6 @@ namespace catrice.DamageIndicator
 
 
         //last slot is for unknown source damages.
-        public double[] PlayerDamage = new double[5]{0, 0, 0, 0, 0};
-        public double TotalDamage = 0;
 
         public static string[] playerName_ = new string[4] {"Red", "Gre", "Blu", "Pur"};
 
@@ -213,6 +257,11 @@ namespace catrice.DamageIndicator
         public TextMeshPro SuccessReport2;
 
         public float[] beforeDamage = new float[5]{0, 0, 0, 0, 0};
+        public DamageInfo DamageInfo;
+
+        public GameObject MapObj { get; set; } = null;
+        public SpriteMask Mask { get; set; } = null;
+        
     }
 
     public struct StateData
@@ -253,7 +302,7 @@ namespace catrice.DamageIndicator
 
             //Logger.Log($"Damage2 Called, Final Damage: {damage} {damage_real}");
 
-            inst.PlayerDamage[playerSrc?.PlayerSlotIndex ?? 4] += damage_real;
+            inst.DamageInfo.PlayerDamage[playerSrc?.PlayerSlotIndex ?? 4] += damage_real;
             inst.isListener = false;
 
         }
@@ -281,7 +330,7 @@ namespace catrice.DamageIndicator
 
             //Logger.Log($"Damage2 Called, Final Damage: {damage} {damage_real}");
 
-            inst.PlayerDamage[playerSrc?.PlayerSlotIndex ?? 4] += damage_real;
+            inst.DamageInfo.PlayerDamage[playerSrc?.PlayerSlotIndex ?? 4] += damage_real;
             inst.isListener = false;
         }
 
@@ -301,7 +350,7 @@ namespace catrice.DamageIndicator
 
             //Logger.Log($"Damage2 Called, Final Damage: {damage} {damage_real}");
 
-            inst.PlayerDamage[playerSrc?.PlayerSlotIndex ?? 4] += damage_real;
+            inst.DamageInfo.PlayerDamage[playerSrc?.PlayerSlotIndex ?? 4] += damage_real;
             inst.isListener = false;
         }
 
@@ -324,7 +373,7 @@ namespace catrice.DamageIndicator
 
             //Logger.Log($"Damage2 Called, Final Damage: {damage} {damage_real}");
 
-            inst.PlayerDamage[playerSrc?.PlayerSlotIndex ?? 4] += damage_real;
+            inst.DamageInfo.PlayerDamage[playerSrc?.PlayerSlotIndex ?? 4] += damage_real;
             inst.isListener = false;
         }
 
@@ -341,74 +390,138 @@ namespace catrice.DamageIndicator
         }
 
         public static int counter;
-        public static List<TextMeshPro> pendingFix = new List<TextMeshPro>();
+        public static HashSet<TextMeshPro> pendingFix = new HashSet<TextMeshPro>();
 
         public static void Postfix_Update(CM_PageExpeditionSuccess __instance)
         {
             counter++;
-            if (counter < 60) return;
+            if (counter < 120) return;
             counter = 0;
             foreach (var item in pendingFix)
             {
-                item.ForceMeshUpdate();
+                //if(item.isActiveAndEnabled)
+                if(item != null)
+                    item.ForceMeshUpdate();
             }
         }
 
-        public static void Postfix_Setup(CM_PageExpeditionSuccess __instance, bool active)
+        public static void Postfix_SetPageActive(CM_PageMap __instance, bool active)
         {
+            var inst = DamageIndicator.Instance;
+            if (inst.MapObj == null)
+            {
+                var go = __instance.gameObject;
+                foreach (var trans in go.GetComponentsInChildren<RectTransform>(true))
+                {
+                    if (trans.name == "MapMover")
+                    {
+                        inst.MapObj = trans.gameObject;
+                        break;
+                    }
+                }
+
+                if (inst.MapObj != null)
+                {
+                    inst.MapObj.transform.parent = go.transform.parent;
+                    inst.MapObj.AddComponent<SpriteMask>();
+                }
+            }
+        }
+
+        public static bool isFirst = false;
+        public static void Postfix_OnEnable(CM_PageExpeditionSuccess __instance)
+        {
+            if (isFirst)
+            {
+                isFirst = false;
+                return;
+            }
             Logger.Log("Finish Called.");
-            if (active == false) return;
+            //if (active == false) return;
             var inst = DamageIndicator.Instance;
             var go = __instance?.gameObject;
             if (go == null) return;
-            if (inst.SuccessReport1 == null)
+            if (true)
             {
-                pendingFix.Clear();
-                foreach (var trans in go.GetComponentsInChildren<RectTransform>(true))
+                //pendingFix.Clear();
+                try
                 {
-                    if (trans.name == "Name")
+
+                    foreach (var trans in go.GetComponentsInChildren<RectTransform>(true))
                     {
-                        var txt = trans.gameObject?.GetComponent<TextMeshPro>();
-                        if (txt != null)
+
+                        //Logger.Log($"Found ele:{trans?.name}");
+                        if (trans?.name == "Name")
                         {
-                            pendingFix.Add(txt);
+                            var txt = trans.gameObject?.GetComponent<TextMeshPro>();
+                            if (txt != null)
+                            {
+                                pendingFix.Add(txt);
+                            }
+                        }
+                        if (trans?.name != "HeaderText") continue;
+                        if (!(trans.parent?.name?.Contains("Anchor") ?? false))
+                            continue;
+                        if (inst != null && inst.SuccessReport1 == null)
+                        {
+                            {
+                                var myHeader = UnityEngine.Object.Instantiate(trans.gameObject, trans.parent);
+                                myHeader.transform.localPosition = new Vector3(0, 70, 0);
+                                inst.SuccessReport1 = myHeader.GetComponent<TextMeshPro>();
+
+                            }
+                            {
+                                var myHeader = UnityEngine.Object.Instantiate(trans.gameObject, trans.parent);
+                                myHeader.transform.localPosition = new Vector3(0, 100, 0);
+                                inst.SuccessReport2 = myHeader.GetComponent<TextMeshPro>();
+
+                            }
+                            if (inst.SuccessReport1 != null)
+                                pendingFix.Add(inst.SuccessReport1);
+                            if (inst.SuccessReport2 != null)
+                                pendingFix.Add(inst.SuccessReport2);
                         }
                     }
-                    if (trans.name != "HeaderText") continue;
-                    {
-                        var myHeader = UnityEngine.Object.Instantiate(trans.gameObject, trans.parent);
-                        myHeader.transform.localPosition = new Vector3(0, 70, 0);
-                        inst.SuccessReport1 = myHeader.GetComponent<TextMeshPro>();
-                        pendingFix.Add(inst.SuccessReport1);
-                    }
-                    {
-                        var myHeader = UnityEngine.Object.Instantiate(trans.gameObject, trans.parent);
-                        myHeader.transform.localPosition = new Vector3(0, 100, 0);
-                        inst.SuccessReport2 = myHeader.GetComponent<TextMeshPro>();
-                        pendingFix.Add(inst.SuccessReport2);
-                    }
                 }
+                catch (Exception e)
+                {
+                    Logger.Log(e.ToString());
+                    throw;
+                }
+            }
+
+            Logger.Log("Finish Display.");
+            if (inst?.SuccessReport1 == null)
+            {
+                Logger.Log("no report instance found, return.");
+                return;
             }
 
             double allDamage = 0;
             for (int index = 0; index < 4; index++)
             {
-                allDamage += inst.PlayerDamage[index];
+                allDamage += inst.DamageInfo.PlayerDamage[index];
             }
+
+            //if (allDamage == 0) return;
+
+
+            Logger.Log("Fill Damage Data.");
 
             string posttxt = "";
             bool isSecond = false;
             for (int index = 0; index < 4; index++)
             {
+                Logger.Log($"Fill Damage Data For Player {index}");
                 string txt = "";
-                if (inst.PlayerDamage[index] == 0)
+                if (inst.DamageInfo.PlayerDamage[index] == 0)
                 {
                     txt = $"{DamageIndicator.playerName_[index]}:      0(  0%)";
                 }
                 else
                 {
                     txt =
-                        $"{DamageIndicator.playerName_[index]}: {Math.Floor(inst.PlayerDamage[index]),6:f0}({Math.Floor((100 * inst.PlayerDamage[index]) / allDamage),3:f0}%)";
+                        $"{DamageIndicator.playerName_[index]}: {Math.Floor(inst.DamageInfo.PlayerDamage[index]),6:f0}({Math.Floor((100 * inst.DamageInfo.PlayerDamage[index]) / allDamage),3:f0}%)";
                 }
                 if ((index % 2) == 0)
                 {
@@ -422,18 +535,27 @@ namespace catrice.DamageIndicator
                     obj.ForceMeshUpdate();
                     isSecond = true;
                 }
+
             }
-            
+
+            Logger.Log("Fill Damage Data Complete.");
+
         }
 
         private static Regex expr = new Regex("(Red|Blu|Gre|Pur): (\\d+)\\((\\d+)%\\)");
-        public static void Postfix__Setup_b__22_2(ref SNet_Player fromPlayer, string msg)
+        private static Regex expr2 = new Regex("(Red|Blu|Gre|Pur): -");
+        public static bool Prefix__Setup_b__17_2(string msg, ref SNet_Player srcPlayer)
         {
             var inst = DamageIndicator.Instance;
-            if (inst == null) return;
-            if (inst.isListener == false) return;
+            if (inst == null) return true;
             var result = expr.Matches(msg);
-            inst.TotalDamage = 0;
+            var fnd = expr2.Matches(msg);
+            if (inst.isListener == false)
+            {
+                return true;
+                return result.Count <= 0 && fnd.Count <= 0;
+            }
+            inst.DamageInfo.TotalDamage = 0;
             foreach (Match ele in result)
             {
                 var dam = double.Parse(ele.Groups[2].Value);
@@ -443,23 +565,32 @@ namespace catrice.DamageIndicator
                 switch (ele.Groups[1].Value.ToLower())
                 {
                     case "red":
-                        inst.PlayerDamage[0] = dam;
+                        inst.DamageInfo.PlayerDamage[0] = dam;
                         break;
                     case "gre":
-                        inst.PlayerDamage[1] = dam;
+                        inst.DamageInfo.PlayerDamage[1] = dam;
                         break;
                     case "blu":
-                        inst.PlayerDamage[2] = dam;
+                        inst.DamageInfo.PlayerDamage[2] = dam;
                         break;
                     case "pur":
-                        inst.PlayerDamage[3] = dam;
+                        inst.DamageInfo.PlayerDamage[3] = dam;
                         break;
                     default:
                         break;
                 }
 
-                inst.TotalDamage += dam;
+                inst.DamageInfo.TotalDamage += dam;
             }
+
+            
+            return result.Count <= 0 && fnd.Count <= 0;
+
+        }
+
+        public static void UseChainedPuzzleOrUnlock_Postfix(SNet_Player user)
+        {
+            Logger.Log($"{user?.GetName()} Activated Door.");
         }
     }
 }
