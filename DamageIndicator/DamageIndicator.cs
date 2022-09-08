@@ -27,12 +27,12 @@ using System.Threading;
 using System.Transactions;
 using Agents;
 using Il2CppSystem.Resources;
-using Nidhogg.Managers;
 using PlayFab.ClientModels;
 using SNetwork;
-using UnhollowerBaseLib;
-using UnhollowerRuntimeLib;
 using CancellationToken = Il2CppSystem.Threading.CancellationToken;
+using GTFO.API;
+
+using NetworkingManager = GTFO.API.NetworkAPI;
 
 namespace catrice.DamageIndicator
 {
@@ -307,23 +307,27 @@ namespace catrice.DamageIndicator
 
         }
 
-        public static void Prefix_ReceiveMeleeDamage(Dam_SyncedDamageBase __instance, pFullDamageData data)//, out StateData __state
+        public static float beforeHealth = 0;
+
+        public static void Prefix_ReceiveMeleeDamage(Dam_EnemyDamageBase __instance, ref pFullDamageData data)//, out StateData __state
         {
             Agents.Agent src;
             data.source.TryGet(out src);
             PlayerAgent playerSrc = src.gameObject.GetComponent<PlayerAgent>();
             var inst = DamageIndicator.Instance;
+            //Debug.Log($"Pre-Melee Damage: limb{data.limbID} {data.skipLimbDestruction} {data.damageNoiseLevel}");
             inst.beforeDamage[playerSrc?.PlayerSlotIndex ?? 4] = __instance.Health;
-
+            data.skipLimbDestruction = false;
         }
 
-        public static void Postfix_ReceiveMeleeDamage(Dam_SyncedDamageBase __instance, pFullDamageData data)//, StateData __state
+        public static void Postfix_ReceiveMeleeDamage(Dam_EnemyDamageBase __instance, ref pFullDamageData data)//, StateData __state
         {
             Agents.Agent src;
             data.source.TryGet(out src);
+            //Debug.Log($"Post-Melee Damage: limb{data.limbID} {data.skipLimbDestruction}");
             PlayerAgent playerSrc = src.gameObject.GetComponent<PlayerAgent>();
             var inst = DamageIndicator.Instance;
-            var damage = inst.beforeDamage[playerSrc?.PlayerSlotIndex ?? 4] - __instance.Health;
+            var damage = inst.beforeDamage[playerSrc?.PlayerSlotIndex ?? 4] - __instance.Health;//
             
 
             var damage_real = inst.beforeDamage[playerSrc?.PlayerSlotIndex ?? 4] - __instance.Health;
@@ -376,6 +380,7 @@ namespace catrice.DamageIndicator
             inst.DamageInfo.PlayerDamage[playerSrc?.PlayerSlotIndex ?? 4] += damage_real;
             inst.isListener = false;
         }
+
 
         public static void Prefix_DoSendChatMessage(ref PlayerChatManager.pChatMessage data)
         {
@@ -467,12 +472,25 @@ namespace catrice.DamageIndicator
                             {
                                 var myHeader = UnityEngine.Object.Instantiate(trans.gameObject, trans.parent);
                                 myHeader.transform.localPosition = new Vector3(0, 70, 0);
+                                var localizer = myHeader.GetComponent<TMP_Localizer>();
+                                if (localizer != null)
+                                {
+                                    localizer.enabled = false;
+                                    Destroy(localizer);
+                                }
                                 inst.SuccessReport1 = myHeader.GetComponent<TextMeshPro>();
 
                             }
                             {
                                 var myHeader = UnityEngine.Object.Instantiate(trans.gameObject, trans.parent);
                                 myHeader.transform.localPosition = new Vector3(0, 100, 0);
+                                var localizer = myHeader.GetComponent<TMP_Localizer>();
+                                if (localizer != null)
+                                {
+                                    localizer.enabled = false;
+                                    Destroy(localizer);
+                                }
+
                                 inst.SuccessReport2 = myHeader.GetComponent<TextMeshPro>();
 
                             }
@@ -490,7 +508,7 @@ namespace catrice.DamageIndicator
                 }
             }
 
-            Logger.Log("Finish Display.");
+            Logger.Log($"Finish Display.");
             if (inst?.SuccessReport1 == null)
             {
                 Logger.Log("no report instance found, return.");
@@ -544,7 +562,7 @@ namespace catrice.DamageIndicator
 
         private static Regex expr = new Regex("(Red|Blu|Gre|Pur): (\\d+)\\((\\d+)%\\)");
         private static Regex expr2 = new Regex("(Red|Blu|Gre|Pur): -");
-        public static bool Prefix__Setup_b__17_2(string msg, ref SNet_Player srcPlayer)
+        public static bool Prefix__Setup_b__22_2(string msg, SNet_Player srcPlayer, SNet_Player dstPlayer)
         {
             var inst = DamageIndicator.Instance;
             if (inst == null) return true;

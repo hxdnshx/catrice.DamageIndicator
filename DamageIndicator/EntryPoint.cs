@@ -4,19 +4,21 @@ using BepInEx.IL2CPP;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using BepInEx.Unity.IL2CPP;
 using BoosterImplants;
 using CellMenu;
 using DropServer;
 using Gear;
 using HarmonyLib;
+using Il2CppInterop.Runtime.Injection;
 using LevelGeneration;
-using UnhollowerRuntimeLib;
 
 namespace catrice.DamageIndicator
 {
     [BepInPlugin(GUID, "DamageIndicator", "1.4.3")]
     [BepInProcess("GTFO.exe")]
-    [BepInDependency("com.kasuromi.nidhogg")]
+    //[BepInDependency("com.kasuromi.nidhogg")]
+    [BepInDependency(GUIDAPI)]
     [BepInDependency(GUIDPlaytime, BepInDependency.DependencyFlags.SoftDependency)]
     [BepInDependency(GUIDAcc, BepInDependency.DependencyFlags.SoftDependency)]
     public class EntryPoint : BasePlugin
@@ -25,6 +27,8 @@ namespace catrice.DamageIndicator
 
         public const string GUIDAcc = "com.catrice.AccuracyShow";
         public const string GUIDPlaytime = "dev.gtfomodding.Playtime";
+
+        public const string GUIDAPI = "dev.gtfomodding.gtfo-api";
 
 
         public static bool PlaytimeInstalled = false;
@@ -115,10 +119,10 @@ namespace catrice.DamageIndicator
 
 
             {
-                var hotReloadInjectPoint = typeof(PUI_GameEventLog).GetMethod("_Setup_b__17_2");
+                var hotReloadInjectPoint = typeof(PUI_GameEventLog).GetMethod("_Setup_b__22_2");
                 if (hotReloadInjectPoint == null) Logger.Log("Fail to Inject GetColoredAgentName");
-                var hotReloadPatch = typeof(DamageIndicatorHooks).GetMethod("Prefix__Setup_b__17_2");
-                var hotReloadPatchPost = typeof(DamageIndicatorHooks).GetMethod("Prefix__Setup_b__17_2");
+                var hotReloadPatch = typeof(DamageIndicatorHooks).GetMethod("Prefix__Setup_b__22_2");
+                var hotReloadPatchPost = typeof(DamageIndicatorHooks).GetMethod("Prefix__Setup_b__22_2");
                 harmony.Patch(hotReloadInjectPoint,  new HarmonyMethod(hotReloadPatchPost));
             }
 

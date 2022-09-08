@@ -7,12 +7,14 @@
 
   <PropertyGroup>
     <BIELibsFolder>$(GameFolder)/BepInEx/core</BIELibsFolder>
-    <UnhollowedLibsFolder>$(GameFolder)/BepInEx/unhollowed</UnhollowedLibsFolder>
+    <!--<UnhollowedLibsFolder>$(GameFolder)/BepInEx/unhollowed</UnhollowedLibsFolder>-->
+    <UnhollowedLibsFolder>$(GameFolder)/BepInEx/interop</UnhollowedLibsFolder>
     <PluginsFolder>$(GameFolder)/BepInEx/plugins</PluginsFolder>
+    <CorLibsFolder>$(GameFolder)/dotnet/corlib</CorLibsFolder>
     <MonoManagedFolder>$(GameFolder)/mono/Managed</MonoManagedFolder>
-    <TargetFramework>netstandard2.1</TargetFramework>
+    <TargetFramework>net6</TargetFramework>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
-    <Version>0.4.3</Version>
+    <Version>0.4.9</Version>
     <RootNamespace>catrice.DamageIndicator</RootNamespace>
     <AssemblyName>catrice.DamageIndicator</AssemblyName>
     <PackageId>catrice.DamageIndicator</PackageId>
@@ -24,9 +26,22 @@
   <ItemGroup>
     <Reference Include="$(BIELibsFolder)/BepInEx.*.dll" Private="false" />
     <Reference Include="$(BIELibsFolder)/0Harmony.dll" Private="false" />
+    <Reference Include="$(BIELibsFolder)/Il2CppInterop.Common.dll" Private="false" />
+    <Reference Include="$(BIELibsFolder)/Il2CppInterop.Generator.dll" Private="false" />
+    <Reference Include="$(BIELibsFolder)/Il2CppInterop.HarmonySupport.dll" Private="false" />
+    <Reference Include="$(BIELibsFolder)/Il2CppInterop.Runtime.dll" Private="false" />
+    <!--
     <Reference Include="$(BIELibsFolder)/UnhollowerBaseLib.dll" Private="false" />
     <Reference Include="$(BIELibsFolder)/UnhollowerRuntimeLib.dll" Private="false" />
     <Reference Include="$(BIELibsFolder)/../plugins/Kasuromi-Nidhogg/Nidhogg.dll" Private="false" />
+-->
+
+
+    <!-- CoreCLR -->
+    <Reference Include="$(CorLibsFolder)\*.dll" Private="false" />
+    <Reference Include="$(CorLibsFolder)\..\System.Private.CoreLib.dll" Private="false" />
+
+    <Reference Include="$(BIELibsFolder)/../plugins/GTFO-API.dll" Private="false" />
     <Reference Include="$(UnhollowedLibsFolder)/*.dll" Private="false" />
     <Compile Remove="Converters\**" />
     <Compile Remove="DTO\**" />
